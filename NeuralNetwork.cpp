@@ -62,6 +62,66 @@ vector<double> NeuralNetwork::predict(DataInstance instance) {
     // Use visitPredictNode and visitPredictNeighbor to handle the neural network math
     // at each step of your traversal.
 
+
+    // Load input values into the input nodes.
+    for (int i = 0; i < input.size(); i++) {
+        int nodeId = inputNodeIds[i];
+        nodes[nodeId]->postActivationValue = input[i];
+    }
+
+    // Mark which nodes are input nodes.
+    vector<bool> isInput(nodes.size(), false);
+
+    for (int i = 0; i < inputNodeIds.size(); i++) {
+        int nodeId = inputNodeIds[i];
+        isInput[nodeId] = true;
+    }
+
+    // Count how many incoming edges each node has.
+    vector<int> incomingCount(nodes.size(), 0);
+
+    for (int v = 0; v < adjacencyList.size(); v++) {
+        for (auto it = adjacencyList[v].begin(); it != adjacencyList[v].end(); it++) {
+            int neighborId = it->second.dest;
+            incomingCount[neighborId]++;
+        }
+    }
+
+    // Start BFT from the input nodes.
+    queue<int> q;
+
+    for (int i = 0; i < inputNodeIds.size(); i++) {
+        q.push(inputNodeIds[i]);
+    }
+
+    // Breadth-first traversal.
+    while (!q.empty()) {
+        int currId = q.front();
+        q.pop();
+
+        // Hidden and output nodes need bias + activation.
+        // Input nodes already have their raw input value.
+        if (!isInput[currId]) {
+            visitPredictNode(currId);
+        }
+
+        // Send currId's value across every outgoing connection.
+        for (auto it = adjacencyList[currId].begin(); it != adjacencyList[currId].end(); it++) {
+            Connection c = it->second;
+
+            visitPredictNeighbor(c);
+
+            int neighborId = c.dest;
+            incomingCount[neighborId]--;
+
+            // Once all incoming connections to this neighbor have been processed, the neighbor is ready to be visited.
+            if (incomingCount[neighborId] == 0) {
+                q.push(neighborId);
+            }
+        }
+    }
+
+
     vector<double> output;
     for (int i = 0; i < outputNodeIds.size(); i++) {
         int dest = outputNodeIds.at(i);
