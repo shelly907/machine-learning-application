@@ -149,7 +149,11 @@ bool NeuralNetwork::contribute(double y, double p) {
     // should not be called on them.
     // The contributions map acts as your "visited" set and also stores each node's
     // computed contribution so it is not recomputed if reached by multiple paths.
+    contributions.clear();
 
+    for (int i = 0; i < inputNodeIds.size(); i++) {
+        contribute(inputNodeIds[i], y, p);
+    }
 
     flush();
 
@@ -166,15 +170,39 @@ double NeuralNetwork::contribute(int nodeId, const double& y, const double& p) {
     NodeInfo* currNode = nodes.at(nodeId);
 
     // If this node is already in the contributions map, return its stored value immediately.
+    if (contributions.find(nodeId) != contributions.end()) {
+        return contributions[nodeId];
+    }
 
     if (adjacencyList.at(nodeId).empty()) {
         // Base case: output node (no outgoing connections).
         // Seeds the backward pass with the initial error signal.
         // You do not need to understand this derivation.
         outgoingContribution = -1 * ((y - p) / (p * (1 - p)));
+    } else {
+        for (auto it = adjacencyList.at(nodeId).begin(); it != adjacencyList.at(nodeId).end(); it++) {
+            int neighborId = it->first;
+
+            incomingContribution = contribute(neighborId, y, p);
+            Connection& connection = it->second;
+            visitContributeNeighbor(connection, incomingContribution, outgoingContribution);
+        }
+    }
+
+    bool isInputNode = false;
+
+    for (int i = 0; i < inputNodeIds.size(); i++) {
+        if (nodeId == inputNodeIds[i]) {
+            isInputNode = true;
+        }
+    }
+
+    if (!isInputNode) {
+        visitContributeNode(nodeId, outgoingContribution);
     }
 
     // Before returning, store outgoingContribution in the contributions map.
+    contributions[nodeId] = outgoingContribution;
 
     return outgoingContribution;
 }
@@ -190,10 +218,23 @@ bool NeuralNetwork::update() {
     // bias update: bias = bias - (learningRate * delta)
     // weight update: weight = weight - (learningRate * delta)
     // reset the delta term for each node and connection to zero.
-    
+
+    for (int i = 0; i < nodes.size(); i++) {
+        nodes[i]->bias = nodes[i]->bias - (learningRate * nodes[i]->delta);
+        nodes[i]->delta = 0;
+    }
+
+
+    for (int v = 0; v < adjacencyList.size(); v++) {
+        for (auto it = adjacencyList[v].begin(); it != adjacencyList[v].end(); it++) {
+            it->second.weight = it->second.weight - (learningRate * it->second.delta);
+            it->second.delta = 0;
+        }
+    }
+
     flush();
     return true;
-    
+
 }
 
 
